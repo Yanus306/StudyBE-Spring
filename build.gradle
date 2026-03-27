@@ -1,0 +1,82 @@
+import groovy.json.JsonBuilder
+import groovy.xml.XmlSlurper
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.3'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'kr.jongyeol'
+version = '0.0.1-SNAPSHOT'
+description = 'Backend-Study-Spring'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    compileOnly 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-websocket-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+
+    doLast {
+        def results = []
+        def pattern = ~/Week(\d+)Tests/
+
+        reports.junitXml.outputLocation.get().asFile.eachFileRecurse { file ->
+            if (!file.name.endsWith('.xml')) return
+            def xml = new XmlSlurper().parse(file)
+            xml.testcase.each { tc ->
+                def className = tc.@classname.toString()
+                def m = pattern.matcher(className)
+                if (!m.find()) return
+                def weekNum = m.group(1).toInteger()
+                def durationMs = (tc.@time.toString().toDouble() * 1000).toLong()
+                def passed = tc.failure.isEmpty() && tc.error.isEmpty()
+                results << [week: weekNum, passed: passed, duration: durationMs]
+            }
+        }
+
+        // Week 단위로 집계 (하나라도 실패하면 false)
+        def weekMap = [:]
+        results.each { r ->
+            def key = "Week${r.week}"
+            if (!weekMap.containsKey(key)) {
+                weekMap[key] = [passed: r.passed, duration: r.duration]
+            } else {
+                weekMap[key].passed = weekMap[key].passed && r.passed
+                weekMap[key].duration += r.duration
+            }
+        }
+
+        def out = new JsonBuilder(weekMap).toPrettyString()
+        def outFile = new File("${layout.buildDirectory.get().asFile}/test-results.json")
+        outFile.parentFile.mkdirs()
+        outFile.text = out
+        println "test-results.json written to ${outFile.absolutePath}"
+    }
+}

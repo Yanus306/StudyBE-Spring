@@ -1,0 +1,157 @@
+name: Grading
+
+on:
+  push:
+    branches:
+      - 'user/**'
+
+concurrency:
+  group: scores-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout user branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Prepare database
+        run: |
+          rm -rf ../database-worktree
+
+          if git ls-remote --exit-code --heads origin database >/dev/null 2>&1; then
+            git fetch origin database
+            git worktree add --track -B database ../database-worktree origin/database
+          else
+            git worktree add ../database-worktree
+            cd ../database-worktree
+
+            git switch --orphan database
+            git commit --allow-empty -m "chore(actions): initialize database branch"
+            git push origin database
+            cd -
+          fi
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          json: 'true'
+
+      - name: Detect target weeks from changed files
+        id: targets
+        run: |
+          if [ -f "../database-worktree/info.json" ]; then
+            PKG_FROM_INFO=$(python3 .github/scripts/grading/read_package_from_info.py 2>/dev/null || true)
+            if [ -n "${PKG_FROM_INFO}" ]; then
+              PACKAGE="${PKG_FROM_INFO}"
+            fi
+          fi
+
+          PACKAGE_PATH="${PACKAGE//./\/}"
+          
+          echo "Package: ${PACKAGE}, Package path: ${PACKAGE_PATH}"
+          
+          echo "Changed files: ${{ steps.changed-files.outputs.all_changed_files }}"
+
+          WEEK_LIST=$(printf "%s\n" "${{ steps.changed-files.outputs.all_changed_files }}" | python3 .github/scripts/grading/extract_target_weeks.py "${PACKAGE}")
+
+          if [ -n "${WEEK_LIST}" ]; then
+            echo "has_target_weeks=true" >> "$GITHUB_OUTPUT"
+            echo "target_weeks=${WEEK_LIST}" >> "$GITHUB_OUTPUT"
+            echo "Target weeks: ${WEEK_LIST}"
+          else
+            echo "has_target_weeks=false" >> "$GITHUB_OUTPUT"
+            echo "target_weeks=" >> "$GITHUB_OUTPUT"
+            echo "No target week changes."
+          fi
+
+      - name: Set up Java 25
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run tests
+        id: run_tests
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        run: |
+          chmod +x ./gradlew
+
+          IFS=',' read -ra WEEKS <<< "${{ steps.targets.outputs.target_weeks }}"
+          TEST_ARGS=()
+          for week in "${WEEKS[@]}"; do
+            TEST_ARGS+=(--tests "*Week${week}Tests")
+          done
+
+          ./gradlew cleanTest test --continue "${TEST_ARGS[@]}"
+        continue-on-error: true
+
+      - name: Configure git
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Extract metadata
+        id: meta
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          NICKNAME="${BRANCH#user/}"
+          echo "nickname=${NICKNAME}" >> "$GITHUB_OUTPUT"
+
+          COMMIT_TS="${{ github.event.head_commit.timestamp }}"
+          COMMIT_EPOCH_MS=$(date -d "${COMMIT_TS}" +%s%3N)
+          echo "commit_epoch_ms=${COMMIT_EPOCH_MS}" >> "$GITHUB_OUTPUT"
+
+      - name: Update database
+        if: steps.targets.outputs.has_target_weeks == 'true'
+        run: |
+          python3 .github/scripts/grading/update_result.py "${{ steps.meta.outputs.nickname }}" "${{ steps.meta.outputs.commit_epoch_ms }}" "${{ steps.targets.outputs.target_weeks }}"
+          
+          cd ../database-worktree
+
+          git add ".study" ".docs"
+
+          if git diff --cached --quiet; then
+            echo "No changes to database branch."
+            exit 0
+          fi
+
+          git commit -m "docs(actions): update results ${NICKNAME}"
+
+          MAX_RETRY=3
+          for i in $(seq 1 $MAX_RETRY); do
+            if git push origin HEAD:database; then
+              echo "Push succeeded on attempt ${i}."
+              exit 0
+            fi
+            echo "Push failed (attempt ${i}/${MAX_RETRY}). Pulling with rebase..."
+            if ! git pull --rebase origin database; then
+              echo "Rebase conflict detected. Aborting."
+              git rebase --abort || true
+              exit 1
+            fi
+          done
+
+          echo "All ${MAX_RETRY} push attempts failed."
+          exit 1
+
+      - name: Fail workflow if tests failed
+        if: steps.targets.outputs.has_target_weeks == 'true' && steps.run_tests.outcome == 'failure'
+        run: |
+          exit 1

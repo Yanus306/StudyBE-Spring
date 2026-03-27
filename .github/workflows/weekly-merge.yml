@@ -1,0 +1,136 @@
+name: Weekly Merge
+
+# 매주 월요일 KST 00:00 = UTC 일요일 15:00
+on:
+  schedule:
+    - cron: '0 15 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  merge:
+    if: |
+      github.repository_owner != 'Jongye0l' || 
+      github.event.repository.name != 'SpringStudyTemplate'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare database
+        run: |
+          rm -rf ../database-worktree
+
+          if git ls-remote --exit-code --heads origin database >/dev/null 2>&1; then
+            git fetch origin database
+            git worktree add --track -B database ../database-worktree origin/database
+          else
+            git worktree add ../database-worktree
+            cd ../database-worktree
+            git switch --orphan database
+            git commit --allow-empty -m "chore(actions): initialize database branch"
+            git push origin database
+            cd -
+          fi
+
+      - name: Update README
+        run: |
+          python3 .github/scripts/weekly-merge/weekly_prepare_assets.py ${{ github.repository }}
+          while IFS= read -r file; do
+            git add "${file}"
+          done < <((find . -type f -name README.md | grep -E '/study/week[0-9]+/README\.md$|\.study\.week[0-9]+/README\.md$' | sort) || true)
+
+          if git diff --cached --quiet; then
+            echo "No week README changes on main."
+          else
+            git commit -m "docs(actions): refresh week ranking readmes"
+            git push origin HEAD:main
+          fi
+
+      - name: Commit placeholders on database
+        run: |
+          cd ../database-worktree
+
+          git add ".study" ".docs"
+
+          if git diff --cached --quiet; then
+            echo "No placeholder changes on database."
+            exit 0
+          fi
+
+          git commit -m "docs(actions): prepare weekly database placeholders"
+
+          MAX_RETRY=3
+          for i in $(seq 1 $MAX_RETRY); do
+            if git push origin HEAD:database; then
+              echo "Push succeeded on attempt ${i}."
+              exit 0
+            fi
+            echo "Push failed (attempt ${i}/${MAX_RETRY}). Pulling with rebase..."
+            if ! git pull --rebase origin database; then
+              echo "Rebase conflict detected. Aborting."
+              git rebase --abort || true
+              exit 1
+            fi
+          done
+
+          echo "All ${MAX_RETRY} push attempts failed."
+          exit 1
+
+      - name: Merge main into each user branch
+        run: |
+          BRANCHES=$(git branch -r | grep 'origin/user/' | sed 's|origin/||' | sed 's|^ ||')
+
+          if [ -z "${BRANCHES}" ]; then
+            echo "No user/** branches found."
+            exit 0
+          fi
+
+          for BRANCH in ${BRANCHES}; do
+            echo "Processing branch: ${BRANCH}"
+            NICKNAME="${BRANCH#user/}"
+
+            git fetch origin "${BRANCH}"
+            git checkout -B "${BRANCH}" "origin/${BRANCH}"
+
+            if git merge --no-edit main; then
+              git push origin "${BRANCH}"
+              echo "Merged main into ${BRANCH}"
+            else
+              git merge --abort || true
+              echo "Conflict on ${BRANCH}. Creating issue..."
+
+              ISSUE_TITLE="Weekly merge conflict: ${BRANCH}"
+              ISSUE_BODY="$(printf '%s\n' \
+                "## 주간 자동 Merge 충돌 발생" \
+                "" \
+                "- 브랜치: \`${BRANCH}\`" \
+                "- 발생 시각: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" \
+                "" \
+                "\`main\` 브랜치의 변경사항을 \`${BRANCH}\`에 수동으로 merge해 주세요." \
+                "" \
+              )"
+
+              gh issue create \
+                  --repo "${{ github.repository }}" \
+                  --title "${ISSUE_TITLE}" \
+                  --body "${ISSUE_BODY}" \
+                  --assignee "${NICKNAME}" 2>/dev/null \
+                || gh issue create \
+                  --repo "${{ github.repository }}" \
+                  --title "${ISSUE_TITLE}" \
+                  --body "${ISSUE_BODY}"
+            fi
+          done

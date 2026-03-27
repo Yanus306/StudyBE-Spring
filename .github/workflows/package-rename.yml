@@ -1,0 +1,71 @@
+name: Package Rename
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_package:
+        description: 'New Java base package (e.g. com.example.project)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  rename:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Rename package
+        run: |
+          python3 .github/scripts/package-rename/package_rename.py "${{ inputs.new_package }}"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "refactor(actions): rename package to ${{ inputs.new_package }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Update database
+        run: |
+          rm -rf ../database-worktree
+
+          if git ls-remote --exit-code --heads origin database >/dev/null 2>&1; then
+            git fetch origin database
+            git worktree add --track -B database ../database-worktree origin/database
+          else
+            git worktree add --detach ../database-worktree
+            cd ../database-worktree
+            git switch --orphan database
+            git commit --allow-empty -m "chore(actions): initialize database branch"
+            git push origin database
+            cd -
+          fi
+          
+          python3 .github/scripts/package-rename/change_info_package.py ${{ inputs.new_package }}
+          
+          cd ../database-worktree
+
+          git add info.json
+
+          if git diff --cached --quiet; then
+            echo "No database info changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(actions): update package info to ${{ inputs.new_package }}"
+          git push origin HEAD:database
