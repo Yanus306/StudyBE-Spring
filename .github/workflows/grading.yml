@@ -23,6 +23,11 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Prepare database
         run: |
           rm -rf ../database-worktree
@@ -99,12 +104,6 @@ jobs:
 
           ./gradlew cleanTest test --continue "${TEST_ARGS[@]}"
         continue-on-error: true
-
-      - name: Configure git
-        if: steps.targets.outputs.has_target_weeks == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Extract metadata
         id: meta
