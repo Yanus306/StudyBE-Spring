@@ -1,4 +1,4 @@
-package kr.jongyeol.springstudytemplate;
+package kr.jongyeol.springstudy;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
