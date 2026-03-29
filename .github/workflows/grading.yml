@@ -36,7 +36,7 @@ jobs:
             git fetch origin database
             git worktree add --track -B database ../database-worktree origin/database
           else
-            git worktree add ../database-worktree
+            git worktree add -f ../database-worktree
             cd ../database-worktree
 
             git switch --orphan database

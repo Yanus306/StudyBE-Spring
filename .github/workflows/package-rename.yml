@@ -48,7 +48,7 @@ jobs:
             git fetch origin database
             git worktree add --track -B database ../database-worktree origin/database
           else
-            git worktree add --detach ../database-worktree
+            git worktree add -f --detach ../database-worktree
             cd ../database-worktree
             git switch --orphan database
             git commit --allow-empty -m "chore(actions): initialize database branch"
