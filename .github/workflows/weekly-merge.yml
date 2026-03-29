@@ -12,9 +12,6 @@ permissions:
 
 jobs:
   merge:
-    if: |
-      github.repository_owner != 'Jongye0l' || 
-      github.event.repository.name != 'SpringStudyTemplate'
     runs-on: ubuntu-latest
 
     steps:
