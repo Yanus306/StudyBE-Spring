@@ -1,3 +1,9 @@
+<!-- WEEK_RANKING_START -->
+## Week2 랭킹
+
+![Week2 랭킹](https://raw.githubusercontent.com/Yanus306/StudyBE-Spring/database/.docs/week/2.svg)
+<!-- WEEK_RANKING_END -->
+
 # Week2
 
 텍스트 변환 API를 구현하며 Spring Web 기초를 익히는 주차입니다.
