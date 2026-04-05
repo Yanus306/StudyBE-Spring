@@ -8,13 +8,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class Week1Controller {
     @GetMapping("/hello")
     public String hello() {
-        // TODO
-        throw new RuntimeException();
+        return "Hello World!";
     }
 
     @GetMapping("/hello/{name}")
     public String helloName(@PathVariable String name) {
-        // TODO
-        throw new RuntimeException();
+        return "Hello " + name + "!";
     }
 }
