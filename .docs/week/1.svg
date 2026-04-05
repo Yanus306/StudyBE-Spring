@@ -13,8 +13,8 @@
 <text x="72" y="22" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">이름</text>
 <text x="252" y="22" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">걸린 시간(ms)</text>
 <text x="382" y="22" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">통과 시간</text>
-<text x="8" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">-</text>
-<text x="72" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">-</text>
-<text x="252" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">-</text>
-<text x="382" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">-</text>
+<text x="8" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">1</text>
+<text x="72" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">Jongyeol</text>
+<text x="252" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">24</text>
+<text x="382" y="56" font-size="14" font-family="Arial, sans-serif" fill="#c9d1d9">2026-04-05 22:58:30</text>
 </svg>
