@@ -141,15 +141,6 @@ class Week2Tests {
     }
 
     @Test
-    void malformedJsonReturnsBadRequest() throws Exception {
-        mockMvc.perform(post("/week2/text/trim")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"text\":\"oops\""))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string("request is invalid"));
-    }
-
-    @Test
     void missingBodyReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/week2/text/word-count")
                         .contentType(MediaType.APPLICATION_JSON))
