@@ -1,3 +1,9 @@
+<!-- WEEK_RANKING_START -->
+## Week4 랭킹
+
+![Week4 랭킹](https://raw.githubusercontent.com/Yanus306/StudyBE-Spring/database/.docs/week/4.svg)
+<!-- WEEK_RANKING_END -->
+
 # Week4
 
 HTTP 요청 검증과 예외 처리, ResponseEntity 사용법을 연습하는 주차입니다.
